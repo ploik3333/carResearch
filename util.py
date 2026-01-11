@@ -1,7 +1,6 @@
 # from typing import Tuple, Generator, Any, overload
 import numpy as np
 import math
-# import os
 from pathlib import Path
 from utila import *
 
@@ -15,16 +14,16 @@ R = lambda x: harmonic(x) * safediv(arithmetic(x))                              
 
 
 @calc_cache
-def calculate_data(file, e=2.7, window_size=50, fl = 9):
+def calculate_data(file, e=2.7, window_size=50, fl = 9, threshold = 0.00):
 
     # get differences in times and direct data from file
-    timediffs, data = read(file)
-
-    x0 = list(map(lambda x:np.float64(x[0]), data)) # times
+    timediffs, attack = read(file)
+    # print(timediffs[:10])
 
     # calculate and display ratios
-    ratios_of = lambda data: [R(data[i:j]) for i,j in window(0,len(data), window_size, include_extra=False)]
+    ratios_of = lambda data: [R(data[i:j]) for i,j in window(0,len(timediffs), window_size, include_extra=False)]
     ratios = ratios_of(timediffs)
+    # print(ratios[:10])
 
     mean = avg(ratios)
     std_dev = math.sqrt(sum([(x-mean)**2 for x in ratios])/(len(ratios)-1))
@@ -48,17 +47,40 @@ def calculate_data(file, e=2.7, window_size=50, fl = 9):
             else:
                 total += 0 # only add outliers
         return total
+    def first_detected(data, start = 0):
+        for i,v in enumerate(data[start:]):
+            if v > threshold:
+                return i+start
+        if start >= len(data):
+            return start
+        return i+start
 
-    sigmoid = lambda x, T=0.04, k=300: 1/(1+e**(-k*(x-T)))
+
+    # sigmoid = lambda x, T=0.04, k=300: 1/(1+e**(-k*(x-T)))
 
 
     RUCs = [RUC(T, fl) for T in range(len(ratios))]
-    RRUCs = [sigmoid(T, T=SMhigh) for T in ratios]
+    # RRUCs = [sigmoid(T, T=SMhigh) for T in ratios]
     # RRUCs = [RUCs[i:j] for i,j in window(0, len(RUCs), window_size, include_extra=False)]
-    first_attack = RRUCs.index([x for x in RRUCs if x > 0.8][0]) * window_size
-    time_to_detection = first_attack - 0#HARD_CODED_STARTS[file]
-    print(f"{first_attack=}")
-    print(f"{time_to_detection=}")
+
+
+    if attack:
+        first_attack = attack.index(1)
+        time_to_detection = first_detected(RUCs, start=first_attack) - first_attack
+        false_alarm = sum([v > threshold for i,v in enumerate(RUCs) if attack[i] == 0])
+        missed = sum([v <= threshold for i,v in enumerate(RUCs) if attack[i] == 1])
+
+        print(f"{first_attack=}")
+        print(f"{time_to_detection=}")
+        print(f"{false_alarm=}")
+        print(f"{missed=}")
+    else:
+        first_attack = 0
+        time_to_detection = 0
+        false_alarm = 0
+        missed = 0
+
+
 
     #  the most important is the false alarm count, time to detection, and last the missed detection rate.
-    return {'SMlow':SMlow, 'SMhigh':SMhigh, 'mean':mean, 'ratio':ratios, 'std_dev':std_dev, 'timediffs': timediffs, 'data': data, 'RUCs':RUCs, 'RRUCs': RRUCs, "ttd": time_to_detection }
+    return {'SMlow':SMlow, 'SMhigh':SMhigh, 'mean':mean, 'ratio':ratios, 'std_dev':std_dev, 'timediffs': timediffs, 'RUCs':RUCs, "ttd": time_to_detection, "fa": false_alarm, 'md': missed  }

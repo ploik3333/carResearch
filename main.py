@@ -4,6 +4,7 @@ import scipy
 import matplotlib.pyplot as plt
 import os
 from pathlib import Path
+import pandas as pd
 # from pypdf import PdfReader
 # import fitz
 # import fontTools
@@ -14,30 +15,24 @@ from util import *
 from mpl_toolkits.mplot3d import axes3d
 
 
-
-
 # find all csv files, so doesnt have to be hard-coded
 csv_files: list[Path] = [Path('./data/') / Path(file) for file in os.listdir("./data") if Path(file).suffix == ".csv"]
 # csv_files = []
-HARD_CODED_STARTS = {"DoS-1.csv": 18076, "DoS-2.csv": 44728, "DoS-3.csv": 44728, "DoS-4.csv": 44728} # (?<!772|17F),0{16}
-# print([file for file in os.listdir("./data") if Path(file).suffix == ".csv"])
 
 # using matplotlib
-fig, axes = plt.subplots(nrows=max(1, len(csv_files)), ncols=4, layout="constrained")
-
-
+fig, axes = plt.subplots(nrows=max(1, len(csv_files)), ncols=3, layout="constrained")
 
 i: int = 0
 
 # loop through all csv files / Main Loop
 for file in csv_files:
     # print(f"calculating {file}")
-    datadict = calculate_data(file, e = 2.7)
+    datadict = calculate_data(file, e = 2.7, cache=False)
     # print(datadict)
 
     axes[i][0].set_title(file)
     axes[i][1].set_title("Ratios of avgs")
-    axes[i][2].set_title("'RUC's (sum outliers)")
+    axes[i][2].set_title("'RUC's (sum of outliers)")
 
 
     # plot length of time between each ecu broadcast
@@ -47,7 +42,7 @@ for file in csv_files:
     # plot RUC
     axes[i][2].plot(range(1, len(datadict['RUCs']) + 1), datadict['RUCs'])
     # plot ratio of RUCs
-    axes[i][3].plot(range(1, len(datadict['RRUCs']) + 1), datadict['RRUCs'])
+    # axes[i][3].plot(range(1, len(datadict['RRUCs']) + 1), datadict['RRUCs'])
 
 
     # plot upper and lower bounds
@@ -59,7 +54,6 @@ for file in csv_files:
 print("done")
 if len(csv_files) > 0:
     plt.show()
-
 
 
 
