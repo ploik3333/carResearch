@@ -73,7 +73,7 @@ def calculate_data(file, e:float=2.7, l:int =50, fl:int = 9, w1:float=0.1, benig
     l = int(l)
 
 
-    # get differences of times, labels of attacks, and direct data from file
+    # get differences in times and direct data from file
     timediffs, attack, x0 = read(file)
     if attack and sum(attack) == 0: benign = True
     if benign: attack = None

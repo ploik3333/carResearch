@@ -31,24 +31,19 @@ def read(path: str | Path) -> Tuple[list[float],list[str]]:
     return timediffs, attack, times
 
 # useful function I wrote, like 'range', but returns windows, aka [(0,2),(2,4),(4,6)] for indexing
-def window(*args, **kwargs) -> Generator[tuple[int | float, int | float], None, None]:
-    def _window(start: int, end: int, size: int, overlap: int = 0, include_extra: bool = True) -> Generator[
-        tuple[int, int], None, None]:
-        if size <= 0 or overlap >= size: raise ValueError("Invalid size")
-        i = start
-        while i < end:
-            if not include_extra and end - i < size: break
-            yield (i, min(i + size, end))
-            i += size - overlap
+def window(*args: int | float, include_extra: bool = True) -> Generator[tuple[int | float, int | float], None, None]:
+    boundCalc = math.ceil if include_extra else math.floor
 
-    required = len(args) + sum([1 for x in ['start', 'end', 'size'] if x in kwargs])
+    def _window(start: int | float, end: int | float, size: int | float, include_extra: bool) -> Generator[tuple[int | float, int | float], None, None]:
+        if size <= 0: raise ValueError("size parameter must be greater than zero")
+        for i in range(boundCalc((end - start) / size)):
+            yield [start + i * size, start + min((end - start), (i + 1) * size)]
 
-    if required == 3:
-        return _window(*args, **kwargs)
-    elif required == 2:
-        return _window(0, *args, **kwargs)
+    if len(args) == 3:
+        return _window(*args, include_extra=include_extra)
+    elif len(args) == 2:
+        return _window(0, *args, include_extra=include_extra)
     raise NotImplementedError("Use implemented parameters: (start, end, size) OR (end, size)")
-
 
 #TODO generalize cache wrapper to use for any function
 #TODO FIX CACHE for simple vs not outputs

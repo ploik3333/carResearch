@@ -2,9 +2,10 @@ import openmdao.api as om
 
 from util import calculate_data
 
+## AI ## rewrite later - for testing purposes !!!
 
 
-# made by ai, rewrite my own later
+
 class IDSEvaluator(om.ExplicitComponent):
     def setup(self):
         # Design Variables
@@ -104,7 +105,7 @@ def runoptimizer():
 
     # === PHASE 1: Minimize False Alarm (Highest Priority) ===
     # Result: We find the absolute best FA possible.
-    res1 = run_optimization_phase("Phase 1", "md", [], current_guess)
+    res1 = run_optimization_phase("Phase 1", "fa", [], current_guess)
 
     # Setup for Phase 2: Protect the FA score we just found
     fa_limit = res1['fa'] + EPS_FA
@@ -113,7 +114,7 @@ def runoptimizer():
     # === PHASE 2: Minimize TTD (Medium Priority) ===
     # Constraint: Keep FA within the limit found in Phase 1
     res2 = run_optimization_phase("Phase 2", "ttd",
-                                  [{'name': 'md', 'upper': fa_limit}],
+                                  [{'name': 'fa', 'upper': fa_limit}],
                                   current_guess)
 
     # Setup for Phase 3: Protect the TTD score we just found
@@ -122,8 +123,8 @@ def runoptimizer():
 
     # === PHASE 3: Minimize Missed Detection (Lowest Priority) ===
     # Constraints: Keep FA and TTD within their established limits
-    res3 = run_optimization_phase("Phase 3", "fa",
-                                  [{'name': 'md', 'upper': fa_limit},
+    res3 = run_optimization_phase("Phase 3", "md",
+                                  [{'name': 'fa', 'upper': fa_limit},
                                    {'name': 'ttd', 'upper': ttd_limit}],
                                   current_guess)
 
