@@ -1,9 +1,9 @@
 import matplotlib.pyplot as plt
-import openmdao.api as om
 
 from util import *
 
-RUN: bool = True
+import optimize
+RUN: bool = False
 
 # find all csv files, so doesnt have to be hard-coded
 csv_files: list[Path] = getFiles('./data/attack') if RUN else []
@@ -14,17 +14,11 @@ if len(csv_files) > 0:
 
 # loop through all csv files / Main Loop
 for i, file in enumerate(csv_files):
-    # e  (epsilon) : 1.1000
-    # w1 (window 1): 10
-    # l  (window 2): 100
-    # fl (frame len): 5
-    datadict = calculate_data(file, e = 1.1, w1 = 1.1, l = 100, fl = 5, cache=False)
-    # print(datadict)
+    datadict = calculate_data(file, e = 1, w1 = 0.80, l = 150, fl = 110, cache=False)
 
     axes[i][0].set_title(file)
     axes[i][1].set_title("Ratios of avgs")
     axes[i][2].set_title("'RUC's (sum of outliers)")
-
 
     # plot length of time between each ecu broadcast
     axes[i][0].plot(range(1, len(datadict['timediffs'])+1), datadict["timediffs"])
@@ -47,18 +41,26 @@ if len(csv_files) > 0:
     plt.show()
 
 
+# print("LB avg", avg(list(map(lambda x:x[0], thresholds))))
+# print("UB avg", avg(list(map(lambda x:x[1], thresholds))))
+# """ # BEST computed averages over a period
+# LB avg -0.01383645104947388
+# UB avg 0.12008719296491677
+# """
+
+
 
 # ttd < .5
 # md <= .55
 
-from optimize import runoptimizer
-# runoptimizer()
 
 
 
-"""
- e  (Threshold) : 5.4613
-  w1 (Weight)    : 0.0362  (w2 = 0.9638)
-  l  (Window)    : 149
-  fl (Frame Len) : 1
+
+
+""" # initially found values - bad
+ e    : 5.4613
+  w1  : 0.0362  (w2 = 0.9638)
+  l   : 149
+  fl  : 1
   """

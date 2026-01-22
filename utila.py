@@ -3,7 +3,7 @@ import json
 import math
 import os
 from pathlib import Path
-from typing import Tuple, Generator
+from typing import Generator, Any
 
 import numpy as np
 import pandas as pd
@@ -19,13 +19,14 @@ def getFiles(dir:str, filetype:str = ".csv") -> list[Path]:
     if not Path(dir).exists() and Path(dir).is_dir():
         os.mkdir(dir)
     return [Path(dir) / file for file in os.listdir(dir) if Path(file).suffix == filetype]
+
 # read data from file & calculate time differences
-def read(path: str | Path) -> Tuple[list[float],list[str]]:
+def read(path: str | Path) -> tuple[list[int], list[Any] | None, Any]:
     df = pd.read_csv(path)
     times = df['timestamp']
     timediffs = [0] + [*np.diff(np.array(times))] # [0] + [float(times[a] - times[a-1]) for a in range(1,len(times))]
     if 'attack' in df:
-        attack = list(df['attack'])
+        attack = list(map(int, df['attack']))
     else:
         attack = None
     return timediffs, attack, times
@@ -68,3 +69,4 @@ def calc_cache(func):
                     json.dump(data, fout)
             return data
     return wrapper
+

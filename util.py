@@ -1,5 +1,5 @@
 import numpy as np
-
+# from pulp import LpVariable
 from utila import *
 
 #useful simple functions
@@ -22,7 +22,7 @@ def RUC(ratios, SMlow, SMhigh, l, _fl):
             total += 0  # only add outliers
     return total
 
-
+@DeprecationWarning
 def first_detected(data, thresholds, start=0):
     for i, v in enumerate(data[start:]):
         if v > thresholds[1]:
@@ -68,62 +68,50 @@ def calculate_t(RUCns, RUCps, w1):
 
 
 @calc_cache
-def calculate_data(file, e:float=2.7, l:int =50, fl:int = 9, w1:float=0.1, benign:bool = False, simple:bool = False, *args, **kwargs):
-    fl = int(fl)
-    l = int(l)
-
-
+def calculate_data(file, e:float=2.7, l:int =50, fl:int = 9, w1:float=0.1, simple:bool = False, *args, **kwargs):
     # get differences in times and direct data from file
     timediffs, attack, x0 = read(file)
-    if attack and sum(attack) == 0: benign = True
-    if benign: attack = None
 
-
-
-    # calculate and display ratios
-    print(l)
-    assert type(l) == int
+    # calculate ratios and RUCs
     ratios_of = lambda data: [R(data[i:j]) for i,j in window(0, len(timediffs), l, include_extra=False)]
     ratios = ratios_of(timediffs)
-    # print(ratios[:10])
 
     mean = avg(ratios)
     std_dev = math.sqrt(sum([(x-mean)**2 for x in ratios])/(len(ratios)-1))
-    print(f"{std_dev = }")
 
     SMhigh = mean + e * std_dev
     SMlow = mean - e * std_dev
-    print(f"{SMhigh = }")
-    print(f"{SMlow = }")
-
-
 
     RUCs = [RUC(ratios, SMlow, SMhigh, T, fl) for T in range(len(ratios))]
-    if benign:
-        thresholds = calculate_t([x for x in RUCs if x < 0], [x for x in RUCs if x > 0], w1=w1)
-        print("threshold =", thresholds[1])
-    else:
-        thresholds = (0,0)
-
-    if attack:
-        first_attack = attack.index(1)
-        print(f"{first_attack = }")
-        print("FIRST DETECTED window =", first_detected(RUCs, thresholds, start=first_attack//l))
-        time_to_detection = x0[first_detected(RUCs, thresholds, start=first_attack//l) * l] - x0[0]
 
 
-        false_alarm = sum([v > thresholds[1] for i,v in enumerate(RUCs) if attack[i] == 0])
-        missed = sum([v <= thresholds[1] for i,v in enumerate(RUCs) if attack[i] == 1])
+    # thresholds for RUCs (algorithm 1)
+    thresholds = calculate_t([x for x in RUCs if x < 0], [x for x in RUCs if x > 0], w1=w1)
+    print("thresholds =", thresholds)
 
-        print(f"{first_attack=}")
-        print(f"{time_to_detection=}")
-        print(f"{false_alarm=}")
-        print(f"{missed=}")
-    else:
-        first_attack = 0
-        time_to_detection = 0
-        false_alarm = 0
-        missed = 0
+
+    windowed_detections = [] # calculating values based on RUC values, not absolute by attack
+    for i, j in window(0, len(attack), l, include_extra=False):
+        windowed_detections.append(1 in attack[i:j])
+
+    first_attack = windowed_detections.index(True)
+    try:
+        time_to_detection = [x > thresholds[1] for x in RUCs].index(True) - first_attack
+    except ValueError:
+        time_to_detection = len(windowed_detections) # didnt find any attacks
+
+    false_alarm = missed = 0
+    for i in range(len(windowed_detections)):
+        if windowed_detections[i] == False and RUCs[i] > thresholds[1]:
+            false_alarm += 1
+        if windowed_detections[i] == True and RUCs[i] <= thresholds[1]:
+            missed += 1
+
+    # print(f"{first_attack=}")
+    # print(f"{time_to_detection=}")
+    # print(f"{false_alarm=}")
+    # print(f"{missed=}")
+
 
 
     #  the most important is the false alarm count, time to detection, and last the missed detection rate.
@@ -131,6 +119,7 @@ def calculate_data(file, e:float=2.7, l:int =50, fl:int = 9, w1:float=0.1, benig
                 "fa": false_alarm,
                 'md': missed
                 }
+    print(toReturn)
     if not simple: # if simple, do not cache
         toReturn.update({
             'SMlow':SMlow,
