@@ -3,4 +3,5 @@ venv/
 .idea/
 cache/
 data/
-
+.env
+*.csv

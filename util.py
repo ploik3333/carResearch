@@ -1,5 +1,5 @@
 import numpy as np
-# from pulp import LpVariable
+
 from utila import *
 
 #useful simple functions
@@ -7,7 +7,6 @@ safediv = lambda a: 0 if a == 0 else 1/a # no divide by zero, 1/0 is 0 here
 harmonic = lambda a: len(a) * safediv(sum(map(safediv, a)))              #len(a)/sum(map(safediv,a))
 arithmetic = avg = lambda a: sum(a)/len(a)
 R = lambda x: harmonic(x) * safediv(arithmetic(x))                                 #harmonic(x)/arithmetic(x)
-
 
 def RUC(ratios, SMlow, SMhigh, l, _fl):
     # fl is frame length
@@ -22,113 +21,86 @@ def RUC(ratios, SMlow, SMhigh, l, _fl):
             total += 0  # only add outliers
     return total
 
-@DeprecationWarning
-def first_detected(data, thresholds, start=0):
-    for i, v in enumerate(data[start:]):
-        if v > thresholds[1]:
-            return i + start
-    if start >= len(data):
-        return start
-    return i + start
+
+def benign_calculations(file, e,w1,fl,l):
+    timediffs, _, _ = read(file)
+    ratios, RUCs, _, _= calc_RUCs(timediffs, e, l, fl)
+
+    tn = np.nanquantile([x for x in RUCs if x < 0], w1)
+    tp = np.nanquantile([x for x in RUCs if x > 0], w1)
+    if tn == np.nan:
+        tn = 0
+    if tp == np.nan:
+        tp = 0
+
+    return tn, tp
 
 
-def calculate_t(RUCns, RUCps, w1):
-    w2 = 1 - w1
-    losses_plus = []
-    losses_minus = []
 
-    n = len(RUCps)
-    # calculate positive bound
-    if n > 0:
-        for 𝜏 in np.linspace(min(RUCps), max(RUCps), 500):
-            cost = 0
-            penalty = 0
-            for r in RUCps:
-                if r > 𝜏:
-                    cost += w1 * abs(r - 𝜏)
-                else:
-                    penalty += w2 * abs(r - 𝜏)
-            losses_plus.append((cost + penalty) / n)
-
-    n = len(RUCns)
-    # calculate negative bound
-    if n > 0:
-        for 𝜏 in np.linspace(min(RUCns), max(RUCns), 500):
-            cost = 0
-            penalty = 0
-            for r in RUCns:
-                if r < 𝜏:
-                    cost += w1 * abs(r - 𝜏)
-                else:
-                    penalty += w2 * abs(r - 𝜏)
-            losses_minus.append((cost + penalty) / n)
-    tp = 0 if len(RUCps) == 0 else np.linspace(min(RUCps), max(RUCps), 500)[np.argmin(losses_plus)]
-    tn = 0 if len(RUCns) == 0 else np.linspace(min(RUCns), max(RUCns), 500)[np.argmin(losses_minus)]
-    return (tn, tp)
-
-
-@calc_cache
-def calculate_data(file, e:float=2.7, l:int =50, fl:int = 9, w1:float=0.1, simple:bool = False, *args, **kwargs):
-    # get differences in times and direct data from file
-    timediffs, attack, x0 = read(file)
-
+def calc_RUCs(timediffs, e, l, fl):
     # calculate ratios and RUCs
-    ratios_of = lambda data: [R(data[i:j]) for i,j in window(0, len(timediffs), l, include_extra=False)]
+    ratios_of = lambda data: [R(data[i:j]) for i, j in window(0, len(timediffs), l, include_extra=False)]
     ratios = ratios_of(timediffs)
 
     mean = avg(ratios)
-    std_dev = math.sqrt(sum([(x-mean)**2 for x in ratios])/(len(ratios)-1))
+    std_dev = math.sqrt(sum([(x - mean) ** 2 for x in ratios]) / (len(ratios) - 1))
 
     SMhigh = mean + e * std_dev
     SMlow = mean - e * std_dev
 
+    # 0.07 seconds, fine
     RUCs = [RUC(ratios, SMlow, SMhigh, T, fl) for T in range(len(ratios))]
+    return ratios, RUCs, SMlow, SMhigh
+
+@cache
+def evaluate(file_i, e:float=2.7, l:int =50, fl:int = 9, w1:float=0.1, simple:bool = True, *args, **kwargs):
+    file = Path(f'./data/attack/Dos-{file_i}-a.csv')
+    timediffs, attack, x0 = read(file)
+    ratios, RUCs, SMlow, SMhigh = calc_RUCs(timediffs, e, l, fl)
 
 
-    # thresholds for RUCs (algorithm 1)
-    thresholds = calculate_t([x for x in RUCs if x < 0], [x for x in RUCs if x > 0], w1=w1)
-    print("thresholds =", thresholds)
+    # algorithm 1 with tao # get these from benign datasets
+    tn, tp = benign_calculations(Path(f'./data/benign/Dos-{file_i}-p.csv'), e = e, w1 = w1, fl = fl, l = l)
 
-
-    windowed_detections = [] # calculating values based on RUC values, not absolute by attack
+    windowed_detections = []  # calculating values based on RUC values, not absolute by attack
     for i, j in window(0, len(attack), l, include_extra=False):
         windowed_detections.append(1 in attack[i:j])
 
-    first_attack = windowed_detections.index(True)
     try:
-        time_to_detection = [x > thresholds[1] for x in RUCs].index(True) - first_attack
+        first_attack = windowed_detections.index(True)
     except ValueError:
-        time_to_detection = len(windowed_detections) # didnt find any attacks
+        first_attack = len(RUCs)
+    for i, frame in enumerate(RUCs):
+        if frame > tp:  # above threshold => detected attack
+            time_to_detection = i
+            break
+    else:  # didnt find one
+        time_to_detection = len(windowed_detections)
 
-    false_alarm = missed = 0
-    for i in range(len(windowed_detections)):
-        if windowed_detections[i] == False and RUCs[i] > thresholds[1]:
+    false_alarm = missed = 0 # initialize
+    for i in range(len(windowed_detections)): # count fa and md as loop
+        if windowed_detections[i] == False and (RUCs[i] > tp or RUCs[i] < tn):
             false_alarm += 1
-        if windowed_detections[i] == True and RUCs[i] <= thresholds[1]:
+        if windowed_detections[i] == True and (tn <= RUCs[i] <= tp):
             missed += 1
 
-    # print(f"{first_attack=}")
-    # print(f"{time_to_detection=}")
-    # print(f"{false_alarm=}")
-    # print(f"{missed=}")
-
-
-
     #  the most important is the false alarm count, time to detection, and last the missed detection rate.
-    toReturn = {"ttd": time_to_detection,
-                "fa": false_alarm,
-                'md': missed
+    toReturn = {
+        "ttd": time_to_detection*l, # multiply by l to get ~total frames - not biased to large values of l
+        "fa": false_alarm,
+        'md': missed / windowed_detections.count(True)
                 }
-    print(toReturn)
-    if not simple: # if simple, do not cache
+
+
+    if not simple: # if simple, do not return (long, dont unnecessarily return)
         toReturn.update({
             'SMlow':SMlow,
             'SMhigh':SMhigh,
-            'mean':mean,
+            # 'mean':mean,
             'ratio':ratios,
-            'std_dev':std_dev,
+            # 'std_dev':std_dev,
             'timediffs': timediffs,
-            'thresholds': thresholds,
+            'thresholds': (tn, tp),
             'RUCs':RUCs
             })
     return toReturn

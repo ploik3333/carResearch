@@ -1,27 +1,28 @@
-#TODO: compile all code into a nice module
-import json
+import atexit
 import math
 import os
+import time
+from functools import cache
 from pathlib import Path
 from typing import Generator, Any
-
+import dotenv
 import numpy as np
 import pandas as pd
+import requests
 
-
-# process each line of 'data' from the file,
-@DeprecationWarning
-def process_data(x: str) -> list[float , str, ...]:
-    split = x.strip().split(",")
-    return [float(split[0]), *split[1:]] # force first value to a float (the time) for later use
+dotenv.load_dotenv()
 
 def getFiles(dir:str, filetype:str = ".csv") -> list[Path]:
     if not Path(dir).exists() and Path(dir).is_dir():
         os.mkdir(dir)
     return [Path(dir) / file for file in os.listdir(dir) if Path(file).suffix == filetype]
 
+
 # read data from file & calculate time differences
+@cache # functools cache
 def read(path: str | Path) -> tuple[list[int], list[Any] | None, Any]:
+    if not isinstance(path, Path):
+        path = Path(path)
     df = pd.read_csv(path)
     times = df['timestamp']
     timediffs = [0] + [*np.diff(np.array(times))] # [0] + [float(times[a] - times[a-1]) for a in range(1,len(times))]
@@ -46,27 +47,24 @@ def window(*args: int | float, include_extra: bool = True) -> Generator[tuple[in
         return _window(0, *args, include_extra=include_extra)
     raise NotImplementedError("Use implemented parameters: (start, end, size) OR (end, size)")
 
-#TODO generalize cache wrapper to use for any function
-#TODO FIX CACHE for simple vs not outputs
-def calc_cache(func):
-    def wrapper(file, *args, cache = True, **kwargs):
-        if not isinstance(file, Path):
-            file = Path(file)
 
-        cached_dir = Path("./cache")
-        if cache and not cached_dir.exists():
-            os.mkdir(cached_dir)
-        cached_file_path = cached_dir / (file.stem + ".json")
-        if cached_file_path.exists() and cache:
-            print(f"Retrieved data for {file.name}")
-            with open(cached_file_path) as f:
-                return json.load(f)
-        else:
-            print(f"Calculating data for {file.name}")
-            data = func(file, *args, **kwargs)
-            if cache:
-                with open(cached_file_path, "w") as fout:
-                    json.dump(data, fout)
-            return data
+def timer(func):
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        value = func(*args, **kwargs)
+        print(f"{func.__name__} took {time.time()-start} seconds")
+        return value
     return wrapper
 
+def discord_log(text):
+    webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
+    if not webhook_url is None:
+        data = {"content": text}
+        response = requests.post(webhook_url, json=data)
+        return response
+
+def log_time_setup():
+    start = time.time()
+    def log_time(start):
+        print(f"Took {time.time() - start} seconds.")
+    atexit.register(log_time, start)
