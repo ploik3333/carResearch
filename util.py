@@ -28,13 +28,12 @@ def benign_calculations(file, e,w1,fl,l):
 
     tn = np.nanquantile([x for x in RUCs if x < 0], w1)
     tp = np.nanquantile([x for x in RUCs if x > 0], w1)
-    if tn == np.nan:
+    if np.isnan(tn):
         tn = 0
-    if tp == np.nan:
+    if np.isnan(tp):
         tp = 0
 
     return tn, tp
-
 
 
 def calc_RUCs(timediffs, e, l, fl):
@@ -53,18 +52,23 @@ def calc_RUCs(timediffs, e, l, fl):
     return ratios, RUCs, SMlow, SMhigh
 
 @cache
-def evaluate(file_i, e:float=2.7, l:int =50, fl:int = 9, w1:float=0.1, simple:bool = True, *args, **kwargs):
-    file = Path(f'./data/attack/Dos-{file_i}-a.csv')
+def evaluate(file, benign, e:float=2.7, l:int =50, fl:int = 9, w1:float=0.1, simple:bool = True, *args, **kwargs):
     timediffs, attack, x0 = read(file)
     ratios, RUCs, SMlow, SMhigh = calc_RUCs(timediffs, e, l, fl)
 
 
     # algorithm 1 with tao # get these from benign datasets
-    tn, tp = benign_calculations(Path(f'./data/benign/Dos-{file_i}-p.csv'), e = e, w1 = w1, fl = fl, l = l)
+    tn, tp = benign_calculations(benign, e = e, w1 = w1, fl = fl, l = l)
 
     windowed_detections = []  # calculating values based on RUC values, not absolute by attack
     for i, j in window(0, len(attack), l, include_extra=False):
         windowed_detections.append(1 in attack[i:j])
+
+    # print(len(windowed_detections), len(RUCs))
+    print(repr(tn), repr(tp))
+    print("detected attacks:", sum([x > tp or x < tn for x in RUCs]))
+    print("window attacks:", windowed_detections.count(True))
+    print("missed attacks:", sum([tn <= x <= tp for x in RUCs]))
 
     try:
         first_attack = windowed_detections.index(True)
@@ -79,7 +83,7 @@ def evaluate(file_i, e:float=2.7, l:int =50, fl:int = 9, w1:float=0.1, simple:bo
 
     false_alarm = missed = 0 # initialize
     for i in range(len(windowed_detections)): # count fa and md as loop
-        if windowed_detections[i] == False and (RUCs[i] > tp or RUCs[i] < tn):
+        if windowed_detections[i] == False and RUCs[i] > tp or RUCs[i] < tn:
             false_alarm += 1
         if windowed_detections[i] == True and (tn <= RUCs[i] <= tp):
             missed += 1

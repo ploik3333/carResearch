@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import numpy as np
 
 from util import *
 log_time_setup()
@@ -7,8 +8,6 @@ log_time_setup()
 # import optimize
 RUN: bool = 4
 
-# find all csv files, so doesnt have to be hard-coded
-# csv_files: list[Path] = getFiles('./data/benign') if RUN else []
 
 # using matplotlib
 if RUN: #len(csv_files) > 0:
@@ -16,15 +15,17 @@ if RUN: #len(csv_files) > 0:
 
 # loop through all csv files / Main Loop
 for i in range (RUN): #, file in enumerate(csv_files):
-    datadict = evaluate(i+1, e=4.59, w1=0.03, fl=15, l=36, simple = False)
+    file = getFiles('./data/attack')[i]
+    benign = getFiles('./data/benign')[i]
+    datadict = evaluate(file, benign, e=3.96, w1=0.27, fl=5, l=32, simple = False)
     value = lambda a: datadict[a]
-    print(f"Calculating DoS-{i+1}-a.csv")
+    print(f"Calculating f{file}")
     print(f"{value('fa')=}")
     print(f"{value('ttd')=}")
     print(f"{value('md')=}")
 
 
-    axes[i][0].set_title(f"DoS-{i+1}.csv")
+    axes[i][0].set_title(f"{file}")
     axes[i][1].set_title("Ratios of avgs")
     axes[i][2].set_title("'RUC's (sum of outliers)")
 
@@ -46,7 +47,7 @@ if RUN: #len(csv_files) > 0:
     plt.show()
 
 
-# Results from one trial (Takes forever)
+# Results from one trial (DOS ATTACK)
 # e=4.66, w1=0.82, fl=111, l=152
 # e=2.69, w1=0.92, fl=32,  l=9
 # e=4.59, w1=0.03, fl=15, l=36

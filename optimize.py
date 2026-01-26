@@ -10,8 +10,9 @@ import utila
 # get values from util.evaluate
 def evaluate(individual):
     e, w1, fl, l = individual
-    file = 3#Path("./data/attack") / "DoS-3-a.csv"
-    results = util.evaluate(file, e=e, w1=w1, fl=fl, l=l)
+    file = util.getFiles('./data/attack')[FILE_INDEX]
+    benign = util.getFiles('./data/benign')[FILE_INDEX]
+    results = util.evaluate(file, benign, e=e, w1=w1, fl=fl, l=l)
 
     fa = results['fa']
     ttd = results['ttd']
@@ -67,13 +68,15 @@ toolbox.register("evaluate", evaluate)
 pop = toolbox.population(n=100)
 hof = tools.HallOfFame(1)
 
+FILE_INDEX = 2
 # calls evaluate and mutate for us, makes it easier
-utila.discord_log("STARTING OPTIMIZATION")
 algorithms.eaSimple(pop, toolbox, cxpb=0.7, mutpb=0.2, ngen=50, halloffame=hof, verbose=True)
 utila.discord_log("DONE WITH OPTIMIZATION")
 
 [e, w1, fl, l] = hof[0] # lexicographical sorting, as variables are ordered by imporetance, it gets the least of each
-results = util.evaluate(3, e=e, w1=w1, fl=fl, l=l)
+file = util.getFiles('./data/attack')[FILE_INDEX]
+benign = util.getFiles('./data/benign')[FILE_INDEX]
+results = util.evaluate(file, benign, e=e, w1=w1, fl=fl, l=l)
 
 
 print(f"{'Best Found Results':^30}")
